@@ -1,8 +1,17 @@
 package com.fanatics.poc.elasticsearch.web;
 
+import java.util.Optional;
+
+import org.apache.commons.lang3.StringUtils;
 import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.action.index.IndexResponse;
+import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.client.Client;
+import org.elasticsearch.index.query.BoolQueryBuilder;
+import org.elasticsearch.index.query.FilterBuilder;
+import org.elasticsearch.index.query.FilteredQueryBuilder;
+import org.elasticsearch.index.query.QueryBuilder;
+import org.elasticsearch.index.query.QueryBuilders;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
@@ -35,5 +44,38 @@ public class IndexData {
 		GetResponse getResponse = client.prepareGet("fanatics", "employee", id).get();
 		//getResponse.getSourceAsString()
 		return getResponse.getSourceAsString();
+	}
+	
+	@RequestMapping(value = "/search", method = RequestMethod.POST, consumes={"application/json"})
+	public String searchDocument(@RequestBody Employee employee) throws JsonProcessingException {
+	    
+		QueryBuilder bool_qb = null;
+		BoolQueryBuilder builder = QueryBuilders.boolQuery();
+		if(!StringUtils.isBlank(employee.getAbout())) {
+			builder.must(QueryBuilders.matchQuery("about", "picnic basket"));
+		}
+		if(employee.getInterests() != null) {
+			for(String s : employee.getInterests()) {
+				builder.must(QueryBuilders.matchQuery("interests", s));
+			}
+		}
+		if(!StringUtils.isBlank(employee.getNonInterest())) {
+			builder.mustNot(QueryBuilders.matchQuery("interests", employee.getNonInterest()));
+		}
+		if(!StringUtils.isBlank(employee.getName().getFirst_name())) {
+			builder.should(QueryBuilders.matchQuery("first_name", employee.getName().getFirst_name()));
+		}		        
+
+		//bool_qb = builder;
+	    FilterBuilder filter_query = new org.elasticsearch.index.query.RangeFilterBuilder("age")
+	    			  .gt(29L).lte(employee.getAge());
+	    FilteredQueryBuilder filter_qb = new FilteredQueryBuilder(builder, filter_query);
+	    
+	    //bool_qb = filter_qb;
+
+		Client client = ESClient.getClient();
+		SearchResponse response = client.prepareSearch("fanatics").setQuery(filter_qb).execute().actionGet();
+
+		return response.toString();
 	}
 }
